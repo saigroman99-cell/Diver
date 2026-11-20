@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Бездна: Дайвер</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #cfe8ff; }
+  canvas { display: block; touch-action: none; }
+
+  #menu {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 30%, #0a2a4a 0%, #020814 70%, #000 100%);
+    text-align: center; padding: 20px;
+  }
+  #menu h1 { font-size: clamp(24px, 7vw, 56px); letter-spacing: 4px; color: #7fd4ff;
+    text-shadow: 0 0 20px #2a8fff, 0 0 40px #0a4a8f; margin-bottom: 8px; }
+  #menu p.sub { color: #5a8ab0; margin-bottom: 40px; font-size: clamp(12px, 3vw, 16px); }
+  .gfx-buttons { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+  .gfx-btn {
+    width: 200px; padding: 18px 14px; border: 2px solid #2a6a9a; border-radius: 12px;
+    background: rgba(10, 40, 70, 0.6); color: #cfe8ff; cursor: pointer;
+    transition: all .2s; font-size: 16px;
+  }
+  .gfx-btn:hover, .gfx-btn:active { border-color: #7fd4ff; background: rgba(30, 90, 140, 0.8);
+    box-shadow: 0 0 25px rgba(60, 160, 255, 0.5); transform: scale(1.03); }
+  .gfx-btn .sub { display: block; font-size: 11px; color: #5a8ab0; margin-top: 6px; }
+
+  #hud { position: fixed; inset: 0; z-index: 50; pointer-events: none; display: none; }
+  #hint { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,20,40,0.7); padding: 6px 16px; border-radius: 20px;
+    font-size: 13px; color: #7fd4ff; white-space: nowrap; }
+  #danger { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 28px; color: #ff4040; font-weight: bold; text-shadow: 0 0 20px #ff0000;
+    opacity: 0; transition: opacity .2s; }
+  #win { position: fixed; inset: 0; z-index: 200; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,10,25,0.85); text-align: center; }
+  #win h2 { font-size: clamp(22px, 6vw, 42px); color: #7fff9f; margin-bottom: 20px;
+    text-shadow: 0 0 30px #00ff6a; }
+  #win button { padding: 14px 40px; font-size: 16px; border: 2px solid #2a9a5a;
+    border-radius: 10px; background: rgba(10,60,30,0.7); color: #cfffe0; cursor: pointer; }
+
+  #touch-controls { position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none; }
+  #joystick-base { position: absolute; left: 30px; bottom: 40px; width: 130px; height: 130px;
+    border-radius: 50%; border: 2px solid rgba(127,212,255,0.4);
+    background: rgba(10,40,70,0.35); pointer-events: auto; touch-action: none; }
+  #joystick-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px;
+    margin: -28px 0 0 -28px; border-radius: 50%;
+    background: radial-gradient(circle, #7fd4ff, #2a6a9a);
+    box-shadow: 0 0 20px rgba(60,160,255,0.6); pointer-events: none; }
+  #btn-hide { position: absolute; right: 30px; bottom: 40px; width: 84px; height: 84px;
+    border-radius: 50%; border: 2px solid rgba(127,255,159,0.6);
+    background: rgba(10,60,30,0.5); color: #cfffe0; font-size: 12px;
+    pointer-events: auto; touch-action: none; display: flex;
+    align-items: center; justify-content: center; text-align: center; line-height: 1.2; }
+  #btn-hide.active { background: rgba(40,160,80,0.8); box-shadow: 0 0 25px #2aff7a; }
+  #btn-up { position: absolute; right: 130px; bottom: 100px; width: 70px; height: 70px;
+    border-radius: 50%; border: 2px solid rgba(255,212,127,0.6);
+    background: rgba(70,50,10,0.5); color: #ffe8c0; font-size: 12px;
+    pointer-events: auto; touch-action: none; display: flex;
+    align-items: center; justify-content: center; text-align: center; line-height: 1.2; }
+  #btn-up.active { background: rgba(160,120,40,0.8); box-shadow: 0 0 25px #ffb42a; }
+  #look-zone { position: absolute; right: 0; top: 0; width: 55%; height: 60%;
+    pointer-events: auto; touch-action: none; }
+  #desktop-hint { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    z-index: 60; display: none; background: rgba(0,20,40,0.7); padding: 8px 20px;
+    border-radius: 20px; font-size: 13px; color: #7fd4ff; pointer-events: none; }
+  /* ВАЖНО: изначально fade прозрачен, чтобы не перекрывать меню */
+  #fade { position: fixed; inset: 0; z-index: 150; background: #000;
+    opacity: 0; pointer-events: none; transition: opacity 1s; }
+  #subtitle { position: fixed; bottom: 12%; left: 50%; transform: translateX(-50%);
+    z-index: 120; color: #cfe8ff; font-size: clamp(14px, 4vw, 20px); text-align: center;
+    max-width: 80%; text-shadow: 0 2px 10px #000; display: none; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>БЕЗДНА</h1>
+  <p class="sub">Погружение. Поломка. Выживание.</p>
+  <div class="gfx-buttons">
+    <button class="gfx-btn" data-gfx="high">ВЫСОКАЯ ГРАФИКА<span class="sub">Тени · PBR · Детализация</span></button>
+    <button class="gfx-btn" data-gfx="low">СЛАБЫЕ УСТРОЙСТВА<span class="sub">Lambert · Без теней · 60 FPS</span></button>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="hint">Плывите к водорослям, чтобы спрятаться от акулы</div>
+  <div id="danger">⚠ АКУЛА БЛИЗКО ⚠</div>
+</div>
+
+<div id="touch-controls">
+  <div id="look-zone"></div>
+  <div id="joystick-base"><div id="joystick-knob"></div></div>
+  <div id="btn-hide">ПРЯТАТЬСЯ</div>
+  <div id="btn-up">ВСПЛЫТЬ</div>
+</div>
+<div id="desktop-hint">WASD / стрелки — движение · Мышь — обзор · Shift — спрятаться · E — всплыть</div>
+
+<div id="fade"></div>
+<div id="subtitle"></div>
+<div id="win">
+  <h2>ВЫ ВСПЛЫЛИ!</h2>
+  <p style="margin-bottom:24px;color:#7fd4ff;">Бездна отпустила вас. Но что вы там видели...</p>
+  <button onclick="location.reload()">ИГРАТЬ СНОВА</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const STATE = { MENU: 0, INTRO: 1, PLAYING: 2, OUTRO: 3, WIN: 4 };
+let currentState = STATE.MENU;
+let gfxLevel = 'high';
+
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+                 ('ontouchstart' in window && window.innerWidth < 900);
+
+// ================= СЦЕНА =================
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.fog = new THREE.FogExp2(0x02101e, 0.045);
+scene.background = new THREE.Color(0x02101e);
+
+// ================= СВЕТ =================
+scene.add(new THREE.AmbientLight(0x445566, 1.5));
+const topLight = new THREE.DirectionalLight(0x88ccff, 2.0);
+topLight.position.set(5, 30, 10);
+scene.add(topLight);
+const playerLight = new THREE.PointLight(0xffcc66, 8, 30, 2);
+scene.add(playerLight);
+const backLight = new THREE.DirectionalLight(0x224466, 0.8);
+backLight.position.set(-10, 10, -10);
+scene.add(backLight);
+
+// ================= МАТЕРИАЛЫ =================
+function makeMat(color, opts = {}) {
+  if (gfxLevel === 'low') {
+    return new THREE.MeshLambertMaterial({ color, ...opts });
+  }
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.65, metalness: 0.25, ...opts });
+}
+
+// ================= МИР =================
+const world = new THREE.Group();
+scene.add(world);
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(180, 180), makeMat(0x0a1a2a));
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -8;
+floor.receiveShadow = true;
+world.add(floor);
+
+// --- Обломки ---
+const debrisGroup = new THREE.Group();
+const debrisColors = [0x3a2a1a, 0x4a4a4a, 0x2a3a4a, 0x5a4a3a];
+
+for (let i = 0; i < 45; i++) {
+  const g = new THREE.Group();
+  const c = debrisColors[i % debrisColors.length];
+  const type = i % 4;
+
+  if (type === 0) {
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.3, 1.2), makeMat(c));
+    g.add(plate);
+    for (let j = 0; j < 3; j++) {
+      const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), makeMat(0x666666));
+      rivet.position.set(-0.8 + j * 0.8, 0.2, 0.4);
+      g.add(rivet);
+    }
+  } else if (type === 1) {
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 2.5, 8), makeMat(c));
+    pipe.rotation.z = Math.PI / 2;
+    g.add(pipe);
+    const flange = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.08, 6, 10), makeMat(0x555555));
+    flange.rotation.y = Math.PI / 2;
+    g.add(flange);
+  } else if (type === 2) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 0.2), makeMat(c));
+    g.add(beam);
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.15, 0.15), makeMat(c));
+    cross.position.y = 0.8;
+    g.add(cross);
+  } else {
+    const chunk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 1.0), makeMat(c));
+    g.add(chunk);
+    const port = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.2, 10), makeMat(0x66aacc));
+    port.rotation.x = Math.PI / 2;
+    port.position.set(0, 0, 0.55);
+    g.add(port);
+  }
+
+  const angle = Math.random() * Math.PI * 2;
+  const r = 8 + Math.random() * 60;
+  g.position.set(Math.cos(angle) * r, -8 + Math.random() * 1.5, Math.sin(angle) * r);
+  g.rotation.set(Math.random() * 0.6, Math.random() * Math.PI, Math.random() * 0.6);
+  g.scale.setScalar(0.5 + Math.random() * 1.8);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  debrisGroup.add(g);
+}
+world.add(debrisGroup);
+
+// --- Водоросли ---
+const seaweedZones = [];
+const seaweedGroup = new THREE.Group();
+const weedMat = makeMat(0x1a6a2a, { transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+
+for (let i = 0; i < 6; i++) {
+  const angle = (i / 6) * Math.PI * 2 + 0.3;
+  const r = 18 + Math.random() * 25;
+  const cx = Math.cos(angle) * r;
+  const cz = Math.sin(angle) * r;
+  const zoneRadius = 7;
+  seaweedZones.push({ position: new THREE.Vector3(cx, -6, cz), radius: zoneRadius });
+
+  for (let j = 0; j < 12; j++) {
+    const h = 4 + Math.random() * 6;
+    const w = 0.6 + Math.random() * 1.2;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), weedMat);
+    const a2 = Math.random() * Math.PI * 2;
+    const rr = Math.random() * zoneRadius * 0.9;
+    plane.position.set(cx + Math.cos(a2) * rr, -8 + h / 2, cz + Math.sin(a2) * rr);
+    plane.rotation.y = Math.random() * Math.PI;
+    seaweedGroup.add(plane);
+  }
+}
+world.add(seaweedGroup);
+
+// --- Батискаф ---
+const subGroup = new THREE.Group();
+const subBody = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 3.5, 12), makeMat(0x778899));
+subBody.rotation.z = Math.PI / 2;
+subGroup.add(subBody);
+const subNose = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 10), makeMat(0x8899aa));
+subNose.position.x = 1.75;
+subGroup.add(subNose);
+const subTail = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.5, 8), makeMat(0x667788));
+subTail.rotation.z = -Math.PI / 2;
+subTail.position.x = -2.4;
+subGroup.add(subTail);
+for (let i = 0; i < 3; i++) {
+  const port = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.15, 10), makeMat(0x66ccff, { emissive: 0x224466 }));
+  port.rotation.z = Math.PI / 2;
+  port.position.set(-0.8 + i * 0.8, 0.5, 1.05);
+  subGroup.add(port);
+}
+const subDome = new THREE.Mesh(new THREE.SphereGeometry(0.7, 10, 8), makeMat(0x66aacc));
+subDome.position.set(0.5, 0.9, 0);
+subGroup.add(subDome);
+const prop = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), makeMat(0x444444));
+prop.position.set(-3.1, 0, 0);
+subGroup.add(prop);
+const prop2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.8), makeMat(0x444444));
+prop2.position.set(-3.1, 0, 0);
+subGroup.add(prop2);
+for (let i = 0; i < 2; i++) {
+  const band = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.08, 6, 12), makeMat(0x445566));
+  band.rotation.y = Math.PI / 2;
+  band.position.x = -0.5 + i * 1.5;
+  subGroup.add(band);
+}
+subGroup.position.set(0, -3, 12);
+subGroup.rotation.z = Math.PI / 2;
+subGroup.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+world.add(subGroup);
+
+// --- Дайвер ---
+const player = new THREE.Group();
+const playerBody = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 1.0, 8), makeMat(0xffaa44));
+playerBody.position.y = 0.1;
+player.add(playerBody);
+const playerHead = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), makeMat(0x88ccff));
+playerHead.position.y = 0.85;
+player.add(playerHead);
+const visor = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), makeMat(0x224466, { emissive: 0x112233 }));
+visor.position.set(0, 0.85, 0.22);
+player.add(visor);
+const tankMat = makeMat(0xcc3333);
+const tank1 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.7, 6), tankMat);
+tank1.position.set(-0.18, 0.3, -0.25);
+player.add(tank1);
+const tank2 = tank1.clone();
+tank2.position.x = 0.18;
+player.add(tank2);
+const finMat = makeMat(0x3366aa);
+const fin1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, 0.5), finMat);
+fin1.position.set(-0.15, -0.35, 0.3);
+player.add(fin1);
+const fin2 = fin1.clone();
+fin2.position.x = 0.15;
+player.add(fin2);
+const lampMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.35, 6), makeMat(0xffee99, { emissive: 0xaa8800 }));
+lampMesh.rotation.x = Math.PI / 2;
+lampMesh.position.set(0, 0.85, 0.4);
+player.add(lampMesh);
+player.position.set(0, -4, 5);
+player.visible = false;
+player.traverse(o => { if (o.isMesh) o.castShadow = true; });
+world.add(player);
+
+// --- Акула ---
+const shark = new THREE.Group();
+const sharkBody = new THREE.Mesh(new THREE.ConeGeometry(0.7, 3.2, 8), makeMat(0x2a3a3a));
+sharkBody.rotation.x = Math.PI / 2;
+shark.add(sharkBody);
+const sharkHead = new THREE.Mesh(new THREE.SphereGeometry(0.65, 8, 6), makeMat(0x2a3a3a));
+sharkHead.position.z = 1.5;
+shark.add(sharkHead);
+const finGeo = new THREE.ConeGeometry(0.35, 0.9, 4);
+const dorsalFin = new THREE.Mesh(finGeo, makeMat(0x1a2a2a));
+dorsalFin.position.set(0, 0.7, -0.2);
+dorsalFin.rotation.x = -0.3;
+shark.add(dorsalFin);
+const sideFin1 = new THREE.Mesh(finGeo, makeMat(0x1a2a2a));
+sideFin1.position.set(0.6, 0, 0.5);
+sideFin1.rotation.z = -0.5;
+sideFin1.scale.set(0.7, 0.5, 1);
+shark.add(sideFin1);
+const sideFin2 = sideFin1.clone();
+sideFin2.position.x = -0.6;
+sideFin2.rotation.z = 0.5;
+shark.add(sideFin2);
+const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.0, 4), makeMat(0x1a2a2a));
+tailFin.position.z = -1.8;
+tailFin.rotation.x = Math.PI / 2;
+tailFin.scale.set(0.6, 1, 0.3);
+shark.add(tailFin);
+for (let i = 0; i < 5; i++) {
+  const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.15, 3), makeMat(0xffffff));
+  tooth.position.set(-0.25 + i * 0.12, -0.15, 1.8);
+  tooth.rotation.x = Math.PI;
+  shark.add(tooth);
+}
+const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), eyeMat);
+eye1.position.set(0.35, 0.2, 1.2);
+shark.add(eye1);
+const eye2 = eye1.clone();
+eye2.position.x = -0.35;
+shark.add(eye2);
+shark.position.set(20, -4, -20);
+shark.traverse(o => { if (o.isMesh) o.castShadow = true; });
+world.add(shark);
+
+const sharkAI = { state: 'PATROL', patrolAngle: 0, patrolRadius: 30, aggroRadius: 18, loseRadius: 32 };
+
+// ================= ПУЗЫРИ =================
+let bubbleCount = 150;
+let bubbleGeo, bubbleMat, bubblePoints, bubbleData;
+function initBubbles() {
+  if (bubblePoints) { world.remove(bubblePoints); bubbleGeo.dispose(); }
+  bubbleGeo = new THREE.BufferGeometry();
+  const positions = new Float32Array(bubbleCount * 3);
+  bubbleData = [];
+  for (let i = 0; i < bubbleCount; i++) {
+    positions[i*3] = (Math.random() - 0.5) * 120;
+    positions[i*3+1] = Math.random() * 20 - 8;
+    positions[i*3+2] = (Math.random() - 0.5) * 120;
+    bubbleData.push({ speed: 0.5 + Math.random() * 1.5 });
+  }
+  bubbleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  bubbleMat = new THREE.PointsMaterial({
+    color: 0x88ccff, size: gfxLevel === 'low' ? 0.12 : 0.2,
+    transparent: true, opacity: 0.5, depthWrite: false
+  });
+  bubblePoints = new THREE.Points(bubbleGeo, bubbleMat);
+  world.add(bubblePoints);
+}
+
+// ================= КАМЕРА =================
+const cameraState = { yaw: 0, pitch: 0.25, distance: 7, height: 2.5 };
+
+// ================= ВВОД =================
+const keys = {};
+addEventListener('keydown', e => keys[e.code] = true);
+addEventListener('keyup', e => keys[e.code] = false);
+
+let mouseLooking = false;
+renderer.domElement.addEventListener('mousedown', () => { if (!isMobile) mouseLooking = true; });
+addEventListener('mouseup', () => mouseLooking = false);
+addEventListener('mousemove', e => {
+  if (!mouseLooking || isMobile) return;
+  cameraState.yaw -= e.movementX * 0.0025;
+  cameraState.pitch = Math.max(-0.6, Math.min(1.2, cameraState.pitch - e.movementY * 0.0025));
+});
+
+const touch = { joyId: null, joyX: 0, joyY: 0, lookId: null, lookLastX: 0, lookLastY: 0, hideBtn: false, upBtn: false };
+const joyBase = document.getElementById('joystick-base');
+const joyKnob = document.getElementById('joystick-knob');
+const lookZone = document.getElementById('look-zone');
+const btnHide = document.getElementById('btn-hide');
+const btnUp = document.getElementById('btn-up');
+
+joyBase.addEventListener('pointerdown', e => {
+  e.preventDefault(); touch.joyId = e.pointerId; joyBase.setPointerCapture(e.pointerId);
+  updateJoy(e.clientX, e.clientY);
+});
+joyBase.addEventListener('pointermove', e => { if (e.pointerId === touch.joyId) updateJoy(e.clientX, e.clientY); });
+function endJoy(e) {
+  if (e.pointerId !== touch.joyId) return;
+  touch.joyId = null; touch.joyX = 0; touch.joyY = 0;
+  joyKnob.style.transform = 'translate(0,0)';
+}
+joyBase.addEventListener('pointerup', endJoy);
+joyBase.addEventListener('pointercancel', endJoy);
+
+function updateJoy(cx, cy) {
+  const r = joyBase.getBoundingClientRect();
+  const ox = r.left + r.width / 2, oy = r.top + r.height / 2, max = r.width / 2;
+  let dx = cx - ox, dy = cy - oy;
+  const d = Math.hypot(dx, dy);
+  if (d > max) { dx = dx / d * max; dy = dy / d * max; }
+  touch.joyX = dx / max; touch.joyY = dy / max;
+  joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+lookZone.addEventListener('pointerdown', e => {
+  e.preventDefault(); touch.lookId = e.pointerId;
+  touch.lookLastX = e.clientX; touch.lookLastY = e.clientY;
+});
+lookZone.addEventListener('pointermove', e => {
+  if (e.pointerId !== touch.lookId) return;
+  cameraState.yaw -= (e.clientX - touch.lookLastX) * 0.005;
+  cameraState.pitch = Math.max(-0.6, Math.min(1.2, cameraState.pitch - (e.clientY - touch.lookLastY) * 0.005));
+  touch.lookLastX = e.clientX; touch.lookLastY = e.clientY;
+});
+lookZone.addEventListener('pointerup', e => { if (e.pointerId === touch.lookId) touch.lookId = null; });
+lookZone.addEventListener('pointercancel', () => touch.lookId = null);
+
+btnHide.addEventListener('pointerdown', e => { e.preventDefault(); touch.hideBtn = true; btnHide.classList.add('active'); });
+btnHide.addEventListener('pointerup', () => { touch.hideBtn = false; btnHide.classList.remove('active'); });
+btnHide.addEventListener('pointercancel', () => { touch.hideBtn = false; btnHide.classList.remove('active'); });
+btnUp.addEventListener('pointerdown', e => { e.preventDefault(); touch.upBtn = true; btnUp.classList.add('active'); });
+btnUp.addEventListener('pointerup', () => { touch.upBtn = false; btnUp.classList.remove('active'); });
+btnUp.addEventListener('pointercancel', () => { touch.upBtn = false; btnUp.classList.remove('active'); });
+
+// ================= ЛОГИКА =================
+const playerState = { hiding: false, inSeaweed: false };
+const introData = { timer: 0, phase: 0 };
+const outroData = { timer: 0, phase: 0 };
+
+const subtitleEl = document.getElementById('subtitle');
+const fadeEl = document.getElementById('fade');
+const hintEl = document.getElementById('hint');
+const dangerEl = document.getElementById('danger');
+
+function showSubtitle(text, dur = 2.5) {
+  subtitleEl.textContent = text;
+  subtitleEl.style.display = 'block';
+  clearTimeout(showSubtitle._t);
+  showSubtitle._t = setTimeout(() => subtitleEl.style.display = 'none', dur * 1000);
+}
+
+function updateIntro(dt) {
+  introData.timer += dt;
+  const t = introData.timer;
+  const angle = t * 0.4;
+  camera.position.set(Math.cos(angle) * 10, Math.sin(t * 0.5) * 1.5, 12 + Math.sin(angle) * 10);
+  camera.lookAt(subGroup.position);
+
+  if (t < 3) {
+    if (introData.phase === 0) { introData.phase = 1; fadeEl.style.opacity = '0'; showSubtitle('Батискаф погружается в бездну...', 3); }
+  } else if (t < 4.5) {
+    if (introData.phase === 1) { introData.phase = 2; subBody.material.color.set(0x442222); showSubtitle('⚠ КРИТИЧЕСКАЯ ПОЛОМКА! ⚠', 2); }
+    subGroup.rotation.z = Math.PI / 2 + Math.sin(t * 30) * 0.05;
+    subGroup.position.y = -3 + Math.sin(t * 20) * 0.1;
+  } else if (t < 6) {
+    if (introData.phase === 2) { introData.phase = 3; player.visible = true; player.position.copy(subGroup.position).add(new THREE.Vector3(0, 1, 2)); showSubtitle('Дайвер покидает батискаф...', 3); }
+    const k = Math.min(1, (t - 4.5) / 1.5);
+    player.position.lerp(new THREE.Vector3(0, -4, 5), k * 0.05);
+  } else if (t > 8) {
+    if (introData.phase === 3) {
+      introData.phase = 4; currentState = STATE.PLAYING;
+      initBubbles();
+      if (isMobile) document.getElementById('touch-controls').style.display = 'block';
+      else document.getElementById('desktop-hint').style.display = 'block';
+    }
+  }
+}
+
+function updateGame(dt) {
+  playerState.inSeaweed = false;
+  let moveX = 0, moveZ = 0;
+  if (isMobile) { moveX = touch.joyX; moveZ = -touch.joyY; }
+  else {
+    if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
+    if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
+    if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+    if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+  }
+  const len = Math.hypot(moveX, moveZ);
+  if (len > 1) { moveX /= len; moveZ /= len; }
+
+  const forward = new THREE.Vector3(Math.sin(cameraState.yaw), 0, Math.cos(cameraState.yaw));
+  const right = new THREE.Vector3(Math.cos(cameraState.yaw), 0, -Math.sin(cameraState.yaw));
+  const moveDir = new THREE.Vector3().addScaledVector(forward, -moveZ).addScaledVector(right, moveX);
+
+  const wantUp = keys['KeyE'] || touch.upBtn;
+  if (wantUp) moveDir.y = 1;
+
+  const speed = playerState.hiding ? 2.5 : 6;
+  player.position.addScaledVector(moveDir, speed * dt);
+  player.position.x = Math.max(-70, Math.min(70, player.position.x));
+  player.position.z = Math.max(-70, Math.min(70, player.position.z));
+  player.position.y = Math.max(-7.5, Math.min(15, player.position.y));
+
+  const hidePressed = isMobile ? touch.hideBtn : (keys['ShiftLeft'] || keys['ShiftRight']);
+  playerState.hiding = hidePressed;
+  for (const zone of seaweedZones) {
+    if (player.position.distanceTo(zone.position) < zone.radius) { playerState.inSeaweed = true; break; }
+  }
+  const isHidden = playerState.inSeaweed && playerState.hiding;
+
+  const camOffset = new THREE.Vector3(
+    Math.sin(cameraState.yaw) * Math.cos(cameraState.pitch) * cameraState.distance,
+    Math.sin(cameraState.pitch) * cameraState.distance + cameraState.height,
+    Math.cos(cameraState.yaw) * Math.cos(cameraState.pitch) * cameraState.distance
+  );
+  camera.position.lerp(player.position.clone().add(camOffset), 1 - Math.pow(0.001, dt));
+  camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 0.5, 0)));
+
+  playerLight.position.copy(player.position);
+  playerLight.position.y += 0.5;
+
+  if (moveDir.lengthSq() > 0.01) {
+    const ta = Math.atan2(moveDir.x, moveDir.z);
+    let diff = ta - player.rotation.y;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    player.rotation.y += diff * Math.min(1, dt * 8);
+  }
+
+  const distToShark = player.position.distanceTo(shark.position);
+  if (isHidden) sharkAI.state = 'PATROL';
+  else if (distToShark < sharkAI.aggroRadius) sharkAI.state = 'CHASE';
+  else if (distToShark > sharkAI.loseRadius) sharkAI.state = 'PATROL';
+
+  if (sharkAI.state === 'PATROL') {
+    sharkAI.patrolAngle += dt * 0.3;
+    const target = new THREE.Vector3(
+      Math.cos(sharkAI.patrolAngle) * sharkAI.patrolRadius,
+      -4 + Math.sin(sharkAI.patrolAngle * 2) * 2,
+      Math.sin(sharkAI.patrolAngle) * sharkAI.patrolRadius
+    );
+    const dir = target.sub(shark.position).normalize();
+    shark.position.addScaledVector(dir, 4 * dt);
+    shark.rotation.y = Math.atan2(dir.x, dir.z);
+    dangerEl.style.opacity = '0';
+  } else {
+    const dir = player.position.clone().sub(shark.position).normalize();
+    shark.position.addScaledVector(dir, 8 * dt);
+    shark.rotation.y = Math.atan2(dir.x, dir.z);
+    dangerEl.style.opacity = '1';
+  }
+
+  if (distToShark < 1.8 && !isHidden) {
+    currentState = STATE.WIN;
+    fadeEl.style.opacity = '1';
+    setTimeout(() => {
+      document.getElementById('win').style.display = 'flex';
+      document.querySelector('#win h2').textContent = 'ВАС СЪЕЛИ...';
+      document.querySelector('#win h2').style.color = '#ff4040';
+    }, 1000);
+    return;
+  }
+
+  const distToSub = player.position.distanceTo(subGroup.position);
+  if (distToSub < 5 && wantUp) {
+    currentState = STATE.OUTRO; outroData.timer = 0; outroData.phase = 0;
+    document.getElementById('touch-controls').style.display = 'none';
+    document.getElementById('desktop-hint').style.display = 'none';
+    dangerEl.style.opacity = '0'; hintEl.style.display = 'none';
+  }
+
+  if (bubblePoints) {
+    const pos = bubbleGeo.attributes.position.array;
+    for (let i = 0; i < bubbleCount; i++) {
+      pos[i*3+1] += bubbleData[i].speed * dt;
+      if (pos[i*3+1] > 15) pos[i*3+1] = -8;
+    }
+    bubbleGeo.attributes.position.needsUpdate = true;
+  }
+
+  if (distToSub < 10) { hintEl.textContent = 'Нажмите E (или ВСПЛЫТЬ) у батискафа'; hintEl.style.color = '#7fff9f'; }
+  else if (playerState.inSeaweed) { hintEl.textContent = 'В водорослях! Нажмите ПРЯТАТЬСЯ'; hintEl.style.color = '#7fff9f'; }
+  else { hintEl.textContent = 'Плывите к водорослям, чтобы спрятаться'; hintEl.style.color = '#7fd4ff'; }
+}
+
+function updateOutro(dt) {
+  outroData.timer += dt;
+  const t = outroData.timer;
+  if (t < 2) {
+    if (outroData.phase === 0) { outroData.phase = 1; showSubtitle('Дайвер забирается в батискаф...', 2.5); }
+    player.position.lerp(subGroup.position.clone().add(new THREE.Vector3(0, 0, 2)), dt * 0.8);
+  } else if (t < 4) {
+    if (outroData.phase === 1) { outroData.phase = 2; player.visible = false; subBody.material.color.set(0x778899); subGroup.rotation.z = 0; showSubtitle('Ремонт завершён. Всплываем!', 2.5); }
+  } else if (t < 8) {
+    if (outroData.phase === 2) { outroData.phase = 3; showSubtitle('Бездна остаётся позади...', 3); }
+    subGroup.position.y += 4 * dt;
+    camera.position.set(subGroup.position.x, subGroup.position.y + 3, subGroup.position.z + 10);
+    camera.lookAt(subGroup.position);
+  } else {
+    if (outroData.phase === 3) {
+      outroData.phase = 4; fadeEl.style.opacity = '1';
+      setTimeout(() => { currentState = STATE.WIN; document.getElementById('win').style.display = 'flex'; }, 1200);
+    }
+  }
+}
+
+// ================= ЦИКЛ =================
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  seaweedGroup.children.forEach((w, i) => { w.rotation.z = Math.sin(t * 0.8 + i) * 0.08; });
+  sharkBody.rotation.z = Math.sin(t * 2) * 0.1;
+
+  switch (currentState) {
+    case STATE.MENU:
+      camera.position.set(Math.sin(t * 0.1) * 20, 2, Math.cos(t * 0.1) * 20);
+      camera.lookAt(0, -4, 0);
+      break;
+    case STATE.INTRO: updateIntro(dt); break;
+    case STATE.PLAYING: updateGame(dt); break;
+    case STATE.OUTRO: updateOutro(dt); break;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ================= ЗАПУСК =================
+function applyGfxSettings(level) {
+  gfxLevel = level;
+  if (level === 'high') {
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    // ВАЖНО: настраиваем shadow-камеру, иначе возможны артефакты/чёрный экран на некоторых GPU
+    topLight.shadow.mapSize.set(1024, 1024);
+    topLight.shadow.camera.left = -60;
+    topLight.shadow.camera.right = 60;
+    topLight.shadow.camera.top = 60;
+    topLight.shadow.camera.bottom = -60;
+    topLight.shadow.camera.near = 0.5;
+    topLight.shadow.camera.far = 120;
+    topLight.castShadow = true;
+    scene.fog.density = 0.035;
+    bubbleCount = 250;
+  } else {
+    renderer.setPixelRatio(1);
+    renderer.shadowMap.enabled = false;
+    topLight.castShadow = false;
+    scene.fog.density = 0.06;
+    bubbleCount = 80;
+  }
+}
+
+function startGame(level) {
+  applyGfxSettings(level);
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  currentState = STATE.INTRO;
+  introData.timer = 0; introData.phase = 0;
+}
+
+document.querySelectorAll('.gfx-btn').forEach(btn => {
+  btn.addEventListener('click', () => startGame(btn.dataset.gfx));
+});
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+applyGfxSettings('high');
+animate();
+</script>
+</body>
+</html>
